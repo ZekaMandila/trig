@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Trigonometric Substitution Simulator</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#fafaf7;--fg:#1d1d1b;--mut:#666;--card:#fff;--bd:#d9d9d2;--ac:#2a5bd7;--ok:#1a7f37;--bad:#c62828;--warn:#b26a00}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#17181a;--fg:#ececea;--mut:#9a9a95;--card:#222426;--bd:#3a3c3f;--ac:#7fa3ff;--ok:#4cc26a;--bad:#ff6b6b;--warn:#f0a63a}}
+:root[data-theme="dark"]{--bg:#17181a;--fg:#ececea;--mut:#9a9a95;--card:#222426;--bd:#3a3c3f;--ac:#7fa3ff;--ok:#4cc26a;--bad:#ff6b6b;--warn:#f0a63a}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+main{max-width:760px;margin:0 auto;padding:14px}
+h1{font-size:20px;margin:4px 0 2px}p.sub{color:var(--mut);margin:0 0 12px;font-size:13px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:12px;margin-bottom:12px}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:end}
+label{display:flex;flex-direction:column;font-size:12px;color:var(--mut);gap:3px}
+input,select,button{font:inherit;padding:7px 9px;border:1px solid var(--bd);border-radius:7px;background:var(--bg);color:var(--fg);min-width:0}
+input{width:110px}select{max-width:100%}
+.tabs{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
+.tabs button{cursor:pointer}.tabs button.on{background:var(--ac);color:#fff;border-color:var(--ac)}
+button.go{background:var(--ac);color:#fff;border-color:var(--ac);cursor:pointer}
+.msg{border-left:4px solid var(--bad);padding:8px 10px;margin:6px 0;background:rgba(198,40,40,.08);border-radius:4px}
+.msg.warn{border-color:var(--warn);background:rgba(178,106,0,.1)}
+ol{padding-left:20px;margin:6px 0}li{margin-bottom:7px}li b{color:var(--ac)}
+.mono{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px}
+.scroll{overflow-x:auto}table{border-collapse:collapse;width:100%}td,th{border-bottom:1px solid var(--bd);padding:5px 6px;text-align:left;font-size:14px}
+.pass{color:var(--ok);font-weight:700}.fail{color:var(--bad);font-weight:700}
+svg text{fill:var(--fg);font-size:12px}svg .l{stroke:var(--fg);fill:none;stroke-width:2}svg .a{stroke:var(--ac);fill:none;stroke-width:2}
+</style></head><body><main>
+<h1>Trigonometric Substitution Simulator</h1>
+<p class="sub">Three radicals, three substitutions. Default A = 3.</p>
+
+<div class="card">
+ <div class="tabs" id="tabs">
+  <button data-m="S">√(A²−x²) · x = A sin θ</button>
+  <button data-m="T">√(A²+x²) · x = A tan θ</button>
+  <button data-m="C">√(x²−A²) · x = A sec θ</button>
+ </div>
+ <div class="row">
+  <label>A (length &gt; 0)<input id="A" value="3" inputmode="decimal"></label>
+  <label>Integrand<select id="fn"></select></label>
+  <label>Lower limit x<input id="lo" inputmode="decimal"></label>
+  <label>Upper limit x<input id="hi" inputmode="decimal"></label>
+  <button class="go" id="run">Run</button>
+ </div>
+ <div class="row" style="margin-top:10px">
+  <label>Load a test case<select id="pre"><option value="">Choose…</option></select></label>
+ </div>
+ <p class="sub" style="margin:8px 0 0">Limits accept expressions such as 3*sqrt(2) or 2*pi.</p>
+ <div id="msgs"></div>
+</div>
+
+<div id="out">
+ <div class="card"><b>Reference triangle</b> (drawn at the upper limit)
+  <div class="scroll"><svg id="tri" viewBox="0 0 340 230" width="100%" style="max-width:420px"></svg></div>
+  <div id="triNote" class="sub"></div></div>
+ <div class="card"><b>Step-by-step solution</b><ol id="steps"></ol></div>
+ <div class="card"><b>Limits and domain</b><div id="lim"></div></div>
+ <div class="card"><b>Self-check: closed form vs numerical integration</b><div id="chk"></div></div>
+</div>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const clamp=v=>Math.max(-1,Math.min(1,v));
+const R=(x)=>Math.sqrt(Math.max(0,x));
+const fmt=v=>Number(v).toFixed(6);
+const MODES={
+ S:{name:"√(A²−x²)",sub:"x = A sin θ",dx:"dx = A cos θ dθ",dom:"|x| ≤ A, which gives θ ∈ [−π/2, π/2]",def:["0","1.5"],
+  fns:{s1:{l:"√(A²−x²)",f:(x,A)=>R(A*A-x*x),F:(x,A)=>x/2*R(A*A-x*x)+A*A/2*Math.asin(clamp(x/A)),sing:false,
+    rad:"√(A²−A²sin²θ) = A|cos θ| = A cos θ, because cos θ ≥ 0 on [−π/2, π/2]",integ:"∫ A cos θ · A cos θ dθ = ∫ A² cos²θ dθ",anti:"(A²/2)(θ + sin θ cos θ) + C",
+    back:"sin θ = x/A (opposite/hypotenuse), cos θ = √(A²−x²)/A (adjacent/hypotenuse), θ = arcsin(x/A), so F(x) = (x/2)√(A²−x²) + (A²/2) arcsin(x/A)"},
+   s2:{l:"x²/√(A²−x²)",f:(x,A)=>x*x/R(A*A-x*x),F:(x,A)=>A*A/2*Math.asin(clamp(x/A))-x/2*R(A*A-x*x),sing:true,
+    rad:"√(A²−A²sin²θ) = A cos θ (θ ∈ [−π/2, π/2])",integ:"∫ (A² sin²θ)/(A cos θ) · A cos θ dθ = ∫ A² sin²θ dθ",anti:"(A²/2)(θ − sin θ cos θ) + C",
+    back:"sin θ = x/A, cos θ = √(A²−x²)/A, θ = arcsin(x/A), so F(x) = (A²/2) arcsin(x/A) − (x/2)√(A²−x²)"}}},
+ T:{name:"√(A²+x²)",sub:"x = A tan θ",dx:"dx = A sec²θ dθ",dom:"all real x, which gives θ ∈ (−π/2, π/2)",def:["0","2"],
+  fns:{t1:{l:"1/√(x²+A²)",f:(x,A)=>1/Math.sqrt(x*x+A*A),F:(x,A)=>Math.asinh(x/A),sing:false,
+    rad:"√(A²tan²θ+A²) = A|sec θ| = A sec θ, because sec θ > 0 on (−π/2, π/2)",integ:"∫ (A sec²θ)/(A sec θ) dθ = ∫ sec θ dθ",anti:"ln|sec θ + tan θ| + C",
+    back:"tan θ = x/A, sec θ = √(x²+A²)/A, so F = ln(x + √(x²+A²)) − ln A, which equals arsinh(x/A). It differs from ln(x+√(x²+A²)) only by the constant −ln A"},
+   t2:{l:"√(x²+A²)",f:(x,A)=>Math.sqrt(x*x+A*A),F:(x,A)=>x/2*Math.sqrt(x*x+A*A)+A*A/2*Math.asinh(x/A),sing:false,
+    rad:"√(A²tan²θ+A²) = A sec θ (sec θ > 0)",integ:"∫ A sec θ · A sec²θ dθ = A² ∫ sec³θ dθ",anti:"(A²/2)(sec θ tan θ + ln|sec θ + tan θ|) + C",
+    back:"tan θ = x/A, sec θ = √(x²+A²)/A, so F(x) = (x/2)√(x²+A²) + (A²/2) arsinh(x/A)"}}},
+ C:{name:"√(x²−A²)",sub:"x = A sec θ",dx:"dx = A sec θ tan θ dθ",dom:"|x| ≥ A, both limits on the same side; θ ∈ [0, π/2) for x ≥ A and θ ∈ (π/2, π] for x ≤ −A",def:["3*sqrt(2)","9"],
+  fns:{c1:{l:"1/(x√(x²−A²))",f:(x,A)=>1/(x*R(x*x-A*A)),F:(x,A)=>Math.acos(A/Math.abs(x))/A,sing:true,
+    rad:"√(A²sec²θ−A²) = A|tan θ|. For x > A, tan θ > 0 so it is A tan θ. For x < −A, tan θ < 0 so it is −A tan θ",integ:"x > A: ∫ (A sec θ tan θ)/(A sec θ · A tan θ) dθ = ∫ (1/A) dθ. For x < −A the integrand is −1/A",anti:"θ/A + C for x > A, and −θ/A + C for x < −A",
+    back:"For x > A, cos θ = A/x (adjacent/hypotenuse), θ = arccos(A/x). Using |x| covers both sides: F(x) = (1/A) arccos(A/|x|) = (1/A) arcsec(|x|/A)"},
+   c2:{l:"√(x²−A²)/x",f:(x,A)=>R(x*x-A*A)/x,F:(x,A)=>R(x*x-A*A)-A*Math.acos(A/Math.abs(x)),sing:false,
+    rad:"√(x²−A²) = A|tan θ|",integ:"x > A: ∫ (A tan θ/(A sec θ)) · A sec θ tan θ dθ = ∫ A tan²θ dθ = A ∫ (sec²θ − 1) dθ",anti:"A(tan θ − θ) + C",
+    back:"tan θ = √(x²−A²)/A (opposite/adjacent), θ = arccos(A/|x|), so F(x) = √(x²−A²) − A arccos(A/|x|)"}}}
+};
+const PRESETS=[
+ ["Case 1 · Sine, 0 to A/2","S","s1","3","0","1.5"],
+ ["Case 2 · Sine, 0 to A (edge)","S","s1","3","0","3"],
+ ["Case 3 · Tan, 0 to 2","T","t1","3","0","2"],
+ ["Case 4 · Tan, −2 to 2 (edge)","T","t1","3","-2","2"],
+ ["Case 5 · Sec, 3√2 to C = 9","C","c1","3","3*sqrt(2)","9"],
+ ["Case 6 · Sec, −9 to −3√2 (absolute value)","C","c1","3","-9","-3*sqrt(2)"],
+ ["Case 7 · Sec, A to 9 (improper endpoint)","C","c1","3","3","9"],
+ ["Change A to 4 · Sine, 0 to 2","S","s1","4","0","2"],
+ ["Change A to 4 · Tan, 0 to 2","T","t1","4","0","2"],
+ ["Change A to 4 · Sec, 4√2 to 9","C","c1","4","4*sqrt(2)","9"]
+];
+let mode="S",last=null;
+function parse(s){s=String(s).trim().toLowerCase().replace(/√/g,"sqrt").replace(/π/g,"pi").replace(/\^/g,"**");
+ if(!s)return NaN;if(s.replace(/sqrt|pi/g,"").replace(/[0-9+\-*\/().\s]/g,"").length)return NaN;
+ try{return Function("sqrt","pi","return ("+s+")")(Math.sqrt,Math.PI)}catch(e){return NaN}}
+function setMode(m,keepLimits){mode=m;
+ document.querySelectorAll("#tabs button").forEach(b=>b.classList.toggle("on",b.dataset.m===m));
+ $("fn").innerHTML=Object.entries(MODES[m].fns).map(([k,v])=>`<option value="${k}">${v.l}</option>`).join("");
+ if(!keepLimits){$("lo").value=MODES[m].def[0];$("hi").value=MODES[m].def[1]}}
+function theta(x,A){if(mode==="S")return Math.asin(clamp(x/A));if(mode==="T")return Math.atan(x/A);
+ const r=Math.acos(clamp(A/Math.abs(x)));return x>0?r:Math.PI-r}
+function validate(A,lo,hi){const e=[],w=[];
+ if(!isFinite(A)||A<=0)e.push("A must be a positive number. A is a length: with A = 0 every triangle collapses to a point and x = A sin θ, A tan θ, A sec θ all give x = 0.");
+ if(!isFinite(lo)||!isFinite(hi))e.push("Both limits must be numbers or simple expressions.");
+ if(e.length)return{e,w};
+ if(lo>hi)e.push("The lower limit must not exceed the upper limit.");
+ if(lo===hi)w.push("The limits are equal, so the integral is 0.");
+ if(mode==="S"){[lo,hi].forEach(x=>{if(Math.abs(x)>A+1e-12)e.push(`Refused: x = ${+x.toFixed(6)} gives A² − x² = ${(A*A-x*x).toFixed(4)} < 0, so √(A²−x²) is not real. Also x = A sin θ can never exceed A in size, because |sin θ| ≤ 1.`)});
+  if(!e.length&&(Math.abs(Math.abs(lo)-A)<1e-12||Math.abs(Math.abs(hi)-A)<1e-12))w.push("A limit sits at x = ±A, where cos θ = 0 and the radical equals 0. The check uses a finer numerical method.")}
+ if(mode==="C"){[lo,hi].forEach(x=>{if(Math.abs(x)<A-1e-12)e.push(`Refused: x = ${+x.toFixed(6)} has |x| < A, so x² − A² = ${(x*x-A*A).toFixed(4)} < 0. x = A sec θ also cannot reach this gap, because |sec θ| ≥ 1.`)});
+  if(!e.length&&lo<0&&hi>0)e.push("Refused: the limits lie on opposite sides of the forbidden interval (−A, A). The integrand is undefined there and the antiderivative is not continuous across it. Run x ≤ −A and x ≥ A as two separate integrals.");
+  if(!e.length&&(Math.abs(Math.abs(lo)-A)<1e-12||Math.abs(Math.abs(hi)-A)<1e-12))w.push("A limit is at x = ±A, where tan θ = 0. This may be an improper integral; the closed form is evaluated as a limit.")}
+ return{e,w}}
+function numeric(k,A,lo,hi){const f=x=>MODES[mode].fns[k].f(x,A);
+ const edge=Math.abs(Math.abs(lo)-A)<1e-12||Math.abs(Math.abs(hi)-A)<1e-12;
+ if(hi===lo)return{v:0,m:"none",tol:1e-6};
+ if(edge&&mode!=="T"){const N=400000,h=(hi-lo)/N;let s=0;for(let i=0;i<N;i++)s+=f(lo+(i+.5)*h);return{v:s*h,m:"midpoint rule, 400000 strips (endpoint at ±A)",tol:1e-3}}
+ const N=2000,h=(hi-lo)/N;let s=f(lo)+f(hi);for(let i=1;i<N;i++)s+=f(lo+i*h)*(i%2?4:2);return{v:s*h/3,m:"Simpson’s rule, 2000 sub-intervals",tol:1e-6}}
+function tri(A,x){const M=mode;let adj,opp,hyp,la,lo_,lh;const ax=Math.abs(x);
+ if(M==="S"){hyp=A;opp=ax;adj=R(A*A-x*x);la="adjacent = √(A²−x²)";lo_="opposite = x";lh="hypotenuse = A"}
+ else if(M==="T"){adj=A;opp=ax;hyp=Math.sqrt(A*A+x*x);la="adjacent = A";lo_="opposite = x";lh="hypotenuse = √(x²+A²)"}
+ else{hyp=ax;adj=A;opp=R(x*x-A*A);la="adjacent = A";lo_="opposite = √(x²−A²)";lh="hypotenuse = x"}
+ const s=Math.min(240/Math.max(adj,1e-9),150/Math.max(opp,1e-9)),X0=30,Y0=195,X1=X0+adj*s,Y1=Y0-opp*s;
+ const al=Math.atan2(opp,adj),th=theta(x,A);
+ const sq=Math.min(12,adj*s,opp*s);
+ let g=`<path class="l" d="M${X0},${Y0} L${X1},${Y0} L${X1},${Y1} Z"/>`;
+ if(sq>3)g+=`<path class="a" d="M${X1-sq},${Y0} L${X1-sq},${Y0-sq} L${X1},${Y0-sq}"/>`;
+ g+=`<path class="a" d="M${X0+30},${Y0} A30,30 0 0 0 ${X0+30*Math.cos(al)},${Y0-30*Math.sin(al)}"/>`;
+ g+=`<text x="${X0+34}" y="${Y0-6}">θ = ${th.toFixed(4)} rad (${(th*180/Math.PI).toFixed(2)}°)</text>`;
+ g+=`<text x="${(X0+X1)/2-50}" y="${Y0+18}">${la} = ${adj.toFixed(4)}</text>`;
+ g+=`<text x="${Math.min(X1+6,200)}" y="${(Y0+Y1)/2}">${lo_} = ${opp.toFixed(4)}</text>`;
+ g+=`<text x="10" y="${Math.max(14,Y1-8)}">${lh} = ${hyp.toFixed(4)}</text>`;
+ $("tri").innerHTML=g;
+ $("triNote").textContent=(M==="C"&&x<0)?"x is negative, so θ = π − (angle shown) lies in (π/2, π), where tan θ < 0. The triangle shows lengths, which are always positive.":"Sides are drawn to scale. Lengths use the absolute value of x.";}
+function run(){
+ const A=parse($("A").value),lo=parse($("lo").value),hi=parse($("hi").value),k=$("fn").value;
+ const v=validate(A,lo,hi);
+ $("msgs").innerHTML=v.e.map(t=>`<div class="msg">${t}</div>`).join("")+v.w.map(t=>`<div class="msg warn">${t}</div>`).join("");
+ if(v.e.length){if(last)$("msgs").innerHTML+=`<div class="msg warn">The display below still shows your last valid run.</div>`;return}
+ last=1;const M=MODES[mode],fn=M.fns[k];
+ tri(A,hi);
+ const tl=theta(lo,A),th=theta(hi,A);
+ const sec=(mode==="C"&&hi<0)?`Here x ≤ −A, so tan θ < 0 and √(x²−A²) = A|tan θ| = −A tan θ. This is where the absolute value matters.`:(mode==="C"?"Here x ≥ A, so tan θ ≥ 0 and A|tan θ| = A tan θ.":"");
+ $("steps").innerHTML=[
+  ["Step 1: Substitution",`${M.sub}, valid for ${M.dom}. Here A = ${A}.`],
+  ["Step 2: Transformed radical",`${fn.rad}.${sec?" "+sec:""}`],
+  ["Step 3: Transformed differential",`${M.dx}.`],
+  ["Step 4: Transformed integral",fn.integ+"."],
+  ["Step 5: Antiderivative in θ",fn.anti+"."],
+  ["Step 6: Back-substitution",fn.back+"."]].map(([a,b])=>`<li><b>${a}.</b> ${b.replace(/^Step \d: [^.]*\.\s*/,"")}</li>`).join("");
+ $("lim").innerHTML=`<table><tr><th></th><th>x</th><th>θ (rad)</th><th>θ (deg)</th></tr>
+  <tr><td>Lower</td><td>${fmt(lo)}</td><td>${fmt(tl)}</td><td>${(tl*180/Math.PI).toFixed(3)}°</td></tr>
+  <tr><td>Upper</td><td>${fmt(hi)}</td><td>${fmt(th)}</td><td>${(th*180/Math.PI).toFixed(3)}°</td></tr></table>
+  <p class="sub">Limits were converted with ${mode==="S"?"θ = arcsin(x/A)":mode==="T"?"θ = arctan(x/A)":"θ = arccos(A/x) for x ≥ A, and θ = π − arccos(A/|x|) for x ≤ −A"}. Domain used: ${M.dom}.</p>`;
+ const cf=fn.F(hi,A)-fn.F(lo,A),nu=numeric(k,A,lo,hi),d=Math.abs(cf-nu.v),pct=Math.abs(cf)>1e-12?d/Math.abs(cf)*100:0;
+ const ok=d<=nu.tol;
+ $("chk").innerHTML=`<table class="mono"><tr><td>Closed form F(upper) − F(lower)</td><td>${fmt(cf)}</td></tr>
+  <tr><td>Numerical value</td><td>${fmt(nu.v)}</td></tr>
+  <tr><td>Absolute difference</td><td>${d.toExponential(3)}</td></tr>
+  <tr><td>Percentage error</td><td>${pct.toExponential(3)} %</td></tr>
+  <tr><td>Method</td><td>${nu.m}</td></tr>
+  <tr><td>Tolerance</td><td>${nu.tol}</td></tr></table>
+  <p>${ok?'<span class="pass">PASS</span>':'<span class="fail">FAIL</span>'}: the closed form ${ok?"agrees":"does not agree"} with numerical integration.</p>`}
+document.querySelectorAll("#tabs button").forEach(b=>b.onclick=()=>{setMode(b.dataset.m,false);run()});
+$("fn").onchange=run;$("run").onclick=run;
+["A","lo","hi"].forEach(i=>$(i).addEventListener("keydown",e=>{if(e.key==="Enter")run()}));
+$("pre").innerHTML+=PRESETS.map((p,i)=>`<option value="${i}">${p[0]}</option>`).join("");
+$("pre").onchange=e=>{if(e.target.value==="")return;const p=PRESETS[+e.target.value];setMode(p[1],true);$("fn").value=p[2];$("A").value=p[3];$("lo").value=p[4];$("hi").value=p[5];run()};
+setMode("S",false);run();
+</script></body></html>
